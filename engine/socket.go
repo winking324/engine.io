@@ -301,8 +301,7 @@ func (s *socket) onDrain() {
 
 	if seqFn, err := s.sentCallbackFn.Shift(); err == nil {
 		socket_log.Info("executing batch send callback with %d callbacks", len(seqFn))
-		for i, fn := range seqFn {
-			socket_log.Debug("executing send callback %d/%d", i+1, len(seqFn))
+		for _, fn := range seqFn {
 			fn(s.Transport())
 		}
 	}
@@ -311,8 +310,6 @@ func (s *socket) onDrain() {
 	remainingBuffer := s.writeBuffer.Len()
 	if remainingBuffer > 0 {
 		socket_log.Info("onDrain: found %d remaining packets in buffer, calling flush()", remainingBuffer)
-	} else {
-		socket_log.Debug("onDrain: no remaining packets, flush() still called to ensure consistency")
 	}
 
 	// Ensure any buffered packets are sent after transport becomes writable again
@@ -549,7 +546,6 @@ func (s *socket) flush() {
 			s.server.Emit("flush", s, wbuf)
 			if packetsFn := s.packetsFn.AllAndClear(); len(packetsFn) > 0 {
 				s.sentCallbackFn.Push(packetsFn)
-				socket_log.Debug("queued %d send callbacks", len(packetsFn))
 			} else {
 				s.sentCallbackFn.Push(nil)
 			}
@@ -557,8 +553,6 @@ func (s *socket) flush() {
 			s.Emit("drain")
 			s.server.Emit("drain", s)
 			socket_log.Info("flush completed: sent %d packets to transport", len(wbuf))
-		} else {
-			socket_log.Debug("flush skipped: buffer is empty")
 		}
 	} else {
 		socket_log.Info("flush blocked: readyState=%s, transport_writable=%t", readyState, transportWritable)

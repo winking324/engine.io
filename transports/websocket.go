@@ -160,7 +160,6 @@ func (w *websocket) send(packets []*packet.Packet) {
 			compress = packet.Options.Compress
 
 			if w.PerMessageDeflate() == nil && packet.Options.WsPreEncodedFrame != nil {
-				ws_log.Debug("packet %d: using pre-encoded frame", i+1)
 				mt := ws.BinaryMessage
 				if _, ok := packet.Options.WsPreEncodedFrame.(*types.StringBuffer); ok {
 					mt = ws.TextMessage
@@ -200,7 +199,6 @@ func (w *websocket) send(packets []*packet.Packet) {
 			return // sendSuccess remains false
 		}
 
-		ws_log.Debug("packet %d: encoded successfully, writing to transport (compress=%t)", i+1, compress)
 		if !w.write(data, compress) {
 			ws_log.Error(`Write failed at packet %d`, i)
 			return // sendSuccess remains false
@@ -224,7 +222,6 @@ func (w *websocket) write(data types.BufferInterface, compress bool) bool {
 	if _, ok := data.(*types.StringBuffer); ok {
 		mt = ws.TextMessage
 	}
-	ws_log.Debug(`write() getting writer: message_type=%d`, mt)
 
 	write, err := w.socket.NextWriter(mt)
 	if err != nil {
@@ -238,7 +235,6 @@ func (w *websocket) write(data types.BufferInterface, compress bool) bool {
 	}
 
 	// Write data
-	ws_log.Debug(`write() copying data to writer`)
 	if _, err := io.Copy(write, data); err != nil {
 		ws_log.Error(`write() failed during data copy: %s`, err.Error())
 		write.Close() // Try to close writer before returning error
@@ -251,7 +247,6 @@ func (w *websocket) write(data types.BufferInterface, compress bool) bool {
 	}
 
 	// Close writer
-	ws_log.Debug(`write() closing writer`)
 	if err := write.Close(); err != nil {
 		ws_log.Error(`write() failed to close writer: %s`, err.Error())
 		if errors.Is(err, net.ErrClosed) {
