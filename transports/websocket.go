@@ -139,8 +139,7 @@ func (w *websocket) send(packets []*packet.Packet) {
 			w.SetWritable(true)
 			w.Emit("ready")
 		} else {
-			ws_log.Error("send() failed: after %v, keeping transport not writable", duration)
-			// If send failed, keep transport not writable to prevent further sends
+			ws_log.Debug("send() failed: after %v, keeping transport not writable", duration)
 			w.OnError("websocket send failed", nil)
 		}
 	}()
