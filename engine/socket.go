@@ -299,6 +299,8 @@ func (s *socket) onDrain() {
 			fn(s.Transport())
 		}
 	}
+	// Ensure any buffered packets are sent after transport becomes writable again
+	s.flush()
 }
 
 // Upgrades socket to the given transport
