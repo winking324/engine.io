@@ -293,12 +293,28 @@ func (s *socket) setTransport(transport transports.Transport) {
 
 // Upon transport "drain" event
 func (s *socket) onDrain() {
+	pendingCallbacks := s.sentCallbackFn.Len()
+	bufferLength := s.writeBuffer.Len()
+
+	socket_log.Info("onDrain() called: pending_callbacks=%d, remaining_buffer=%d",
+		pendingCallbacks, bufferLength)
+
 	if seqFn, err := s.sentCallbackFn.Shift(); err == nil {
-		socket_log.Debug("executing batch send callback")
-		for _, fn := range seqFn {
+		socket_log.Info("executing batch send callback with %d callbacks", len(seqFn))
+		for i, fn := range seqFn {
+			socket_log.Debug("executing send callback %d/%d", i+1, len(seqFn))
 			fn(s.Transport())
 		}
 	}
+
+	// Check if there are remaining packets to flush
+	remainingBuffer := s.writeBuffer.Len()
+	if remainingBuffer > 0 {
+		socket_log.Info("onDrain: found %d remaining packets in buffer, calling flush()", remainingBuffer)
+	} else {
+		socket_log.Debug("onDrain: no remaining packets, flush() still called to ensure consistency")
+	}
+
 	// Ensure any buffered packets are sent after transport becomes writable again
 	s.flush()
 }
@@ -498,12 +514,19 @@ func (s *socket) sendPacket(
 
 		s.writeBuffer.Push(packet)
 
+		bufferLength := s.writeBuffer.Len()
+		transportWritable := s.Transport().Writable()
+		socket_log.Info(`packet "%s" added to buffer (buffer_size=%d, transport_writable=%t)`,
+			packetType, bufferLength, transportWritable)
+
 		// add send callback to object, if defined
 		if callback != nil {
 			s.packetsFn.Push(callback)
 		}
 
 		s.flush()
+	} else {
+		socket_log.Info(`packet "%s" dropped: socket state is %s`, packetType, s.ReadyState())
 	}
 }
 
@@ -512,20 +535,33 @@ func (s *socket) flush() {
 	s.flushMu.Lock()
 	defer s.flushMu.Unlock()
 
-	if s.ReadyState() != "closed" && s.Transport().Writable() {
+	readyState := s.ReadyState()
+	transportWritable := s.Transport().Writable()
+	bufferLength := s.writeBuffer.Len()
+
+	socket_log.Info("flush() called: readyState=%s, transport_writable=%t, buffer_size=%d",
+		readyState, transportWritable, bufferLength)
+
+	if readyState != "closed" && transportWritable {
 		if wbuf := s.writeBuffer.AllAndClear(); len(wbuf) > 0 {
-			socket_log.Debug("flushing buffer to transport")
+			socket_log.Info("flushing %d packets to transport", len(wbuf))
 			s.Emit("flush", wbuf)
 			s.server.Emit("flush", s, wbuf)
 			if packetsFn := s.packetsFn.AllAndClear(); len(packetsFn) > 0 {
 				s.sentCallbackFn.Push(packetsFn)
+				socket_log.Debug("queued %d send callbacks", len(packetsFn))
 			} else {
 				s.sentCallbackFn.Push(nil)
 			}
 			s.Transport().Send(wbuf)
 			s.Emit("drain")
 			s.server.Emit("drain", s)
+			socket_log.Info("flush completed: sent %d packets to transport", len(wbuf))
+		} else {
+			socket_log.Debug("flush skipped: buffer is empty")
 		}
+	} else {
+		socket_log.Info("flush blocked: readyState=%s, transport_writable=%t", readyState, transportWritable)
 	}
 }
 

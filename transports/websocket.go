@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 
 	ws "github.com/gorilla/websocket"
 	"github.com/zishang520/engine.io-go-parser/packet"
@@ -124,107 +125,145 @@ func (w *websocket) onMessage(data types.BufferInterface) {
 
 // Writes a packet payload.
 func (w *websocket) Send(packets []*packet.Packet) {
+	ws_log.Info("Send() called: setting writable=false, starting async send of %d packets", len(packets))
 	w.SetWritable(false)
 	go w.send(packets)
 }
 func (w *websocket) send(packets []*packet.Packet) {
+	ws_log.Info("send() started: processing batch of %d packets", len(packets))
+	startTime := time.Now()
+
+	var sendSuccess bool = false
 	defer func() {
-		w.Emit("drain")
-		w.SetWritable(true)
-		w.Emit("ready")
+		duration := time.Since(startTime)
+		if sendSuccess {
+			ws_log.Info("send() completed successfully: %d packets sent in %v, emitting drain/ready", len(packets), duration)
+			w.Emit("drain")
+			w.SetWritable(true)
+			w.Emit("ready")
+		} else {
+			ws_log.Error("send() failed: after %v, keeping transport not writable", duration)
+			// If send failed, keep transport not writable to prevent further sends
+			w.OnError("websocket send failed", nil)
+		}
 	}()
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	for _, packet := range packets {
+	for i, packet := range packets {
+		ws_log.Info("processing packet %d/%d (type=%s)", i+1, len(packets), packet.Type)
+
 		// always creates a new object since ws modifies it
 		compress := false
 		if packet.Options != nil {
 			compress = packet.Options.Compress
 
 			if w.PerMessageDeflate() == nil && packet.Options.WsPreEncodedFrame != nil {
+				ws_log.Debug("packet %d: using pre-encoded frame", i+1)
 				mt := ws.BinaryMessage
 				if _, ok := packet.Options.WsPreEncodedFrame.(*types.StringBuffer); ok {
 					mt = ws.TextMessage
 				}
 				pm, err := ws.NewPreparedMessage(mt, packet.Options.WsPreEncodedFrame.Bytes())
 				if err != nil {
-					ws_log.Debug(`Send Error "%s"`, err.Error())
+					ws_log.Error(`Send Error at packet %d: "%s"`, i, err.Error())
 					if errors.Is(err, net.ErrClosed) {
 						w.socket.Emit("close")
 					} else {
 						w.socket.Emit("error", err)
 					}
-					return
+					return // sendSuccess remains false
 				}
 				if err := w.socket.WritePreparedMessage(pm); err != nil {
-					ws_log.Debug(`Send Error "%s"`, err.Error())
+					ws_log.Error(`Send Error at packet %d: "%s"`, i, err.Error())
 					if errors.Is(err, net.ErrClosed) {
 						w.socket.Emit("close")
 					} else {
 						w.socket.Emit("error", err)
 					}
-					return
+					return // sendSuccess remains false
 				}
-				return
-
+				ws_log.Info("packet %d: pre-encoded frame sent successfully", i+1)
+				continue
 			}
 		}
 
 		data, err := w.Parser().EncodePacket(packet, w.SupportsBinary())
 		if err != nil {
-			ws_log.Debug(`Send Error "%s"`, err.Error())
+			ws_log.Error(`Send Error at packet %d: "%s"`, i, err.Error())
 			if errors.Is(err, net.ErrClosed) {
 				w.socket.Emit("close")
 			} else {
 				w.socket.Emit("error", err)
 			}
-			return
+			return // sendSuccess remains false
 		}
-		w.write(data, compress)
+
+		ws_log.Debug("packet %d: encoded successfully, writing to transport (compress=%t)", i+1, compress)
+		if !w.write(data, compress) {
+			ws_log.Error(`Write failed at packet %d`, i)
+			return // sendSuccess remains false
+		}
+		ws_log.Info("packet %d: written successfully", i+1)
 	}
+
+	ws_log.Info("all %d packets processed successfully", len(packets))
+	sendSuccess = true // Only set to true if all packets were sent successfully
 }
-func (w *websocket) write(data types.BufferInterface, compress bool) {
+func (w *websocket) write(data types.BufferInterface, compress bool) bool {
 	if w.PerMessageDeflate() != nil {
 		if data.Len() < w.PerMessageDeflate().Threshold {
 			compress = false
 		}
 	}
-	ws_log.Debug(`writing %#v`, data)
+	ws_log.Info(`write() starting: data_len=%d, compress=%t`, data.Len(), compress)
 
 	w.socket.EnableWriteCompression(compress)
 	mt := ws.BinaryMessage
 	if _, ok := data.(*types.StringBuffer); ok {
 		mt = ws.TextMessage
 	}
+	ws_log.Debug(`write() getting writer: message_type=%d`, mt)
+
 	write, err := w.socket.NextWriter(mt)
 	if err != nil {
+		ws_log.Error(`write() failed to get writer: %s`, err.Error())
 		if errors.Is(err, net.ErrClosed) {
 			w.socket.Emit("close")
 		} else {
 			w.socket.Emit("error", err)
 		}
-		return
+		return false
 	}
-	defer func() {
-		if err := write.Close(); err != nil {
-			if errors.Is(err, net.ErrClosed) {
-				w.socket.Emit("close")
-			} else {
-				w.socket.Emit("error", err)
-			}
-			return
-		}
-	}()
+
+	// Write data
+	ws_log.Debug(`write() copying data to writer`)
 	if _, err := io.Copy(write, data); err != nil {
+		ws_log.Error(`write() failed during data copy: %s`, err.Error())
+		write.Close() // Try to close writer before returning error
 		if errors.Is(err, net.ErrClosed) {
 			w.socket.Emit("close")
 		} else {
 			w.socket.Emit("error", err)
 		}
-		return
+		return false
 	}
+
+	// Close writer
+	ws_log.Debug(`write() closing writer`)
+	if err := write.Close(); err != nil {
+		ws_log.Error(`write() failed to close writer: %s`, err.Error())
+		if errors.Is(err, net.ErrClosed) {
+			w.socket.Emit("close")
+		} else {
+			w.socket.Emit("error", err)
+		}
+		return false
+	}
+
+	ws_log.Info(`write() completed successfully`)
+	return true
 }
 
 // Closes the transport.
