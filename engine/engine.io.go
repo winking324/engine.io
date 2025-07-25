@@ -3,8 +3,8 @@ package engine
 import (
 	"net/http"
 
+	"github.com/winking324/engine.io/v2/types"
 	"github.com/zishang520/engine.io-go-parser/parser"
-	"github.com/zishang520/engine.io/v2/types"
 )
 
 const Protocol = parser.Protocol

@@ -7,15 +7,15 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/winking324/engine.io/v2/config"
+	"github.com/winking324/engine.io/v2/errors"
+	"github.com/winking324/engine.io/v2/events"
+	"github.com/winking324/engine.io/v2/transports"
+	"github.com/winking324/engine.io/v2/types"
+	"github.com/winking324/engine.io/v2/utils"
+	webtrans "github.com/winking324/engine.io/v2/webtransport"
 	"github.com/zishang520/engine.io-go-parser/packet"
 	"github.com/zishang520/engine.io-go-parser/parser"
-	"github.com/zishang520/engine.io/v2/config"
-	"github.com/zishang520/engine.io/v2/errors"
-	"github.com/zishang520/engine.io/v2/events"
-	"github.com/zishang520/engine.io/v2/transports"
-	"github.com/zishang520/engine.io/v2/types"
-	"github.com/zishang520/engine.io/v2/utils"
-	webtrans "github.com/zishang520/engine.io/v2/webtransport"
 	"github.com/zishang520/webtransport-go"
 )
 

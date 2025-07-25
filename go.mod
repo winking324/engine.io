@@ -1,4 +1,4 @@
-module github.com/zishang520/engine.io/v2
+module github.com/winking324/engine.io/v2
 
 go 1.24.1
 

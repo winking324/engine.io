@@ -6,13 +6,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zishang520/engine.io/v2/config"
-	"github.com/zishang520/engine.io/v2/errors"
-	"github.com/zishang520/engine.io/v2/events"
-	"github.com/zishang520/engine.io/v2/log"
-	"github.com/zishang520/engine.io/v2/transports"
-	"github.com/zishang520/engine.io/v2/types"
-	"github.com/zishang520/engine.io/v2/utils"
+	"github.com/winking324/engine.io/v2/config"
+	"github.com/winking324/engine.io/v2/errors"
+	"github.com/winking324/engine.io/v2/events"
+	"github.com/winking324/engine.io/v2/log"
+	"github.com/winking324/engine.io/v2/transports"
+	"github.com/winking324/engine.io/v2/types"
+	"github.com/winking324/engine.io/v2/utils"
 )
 
 var (

@@ -1,7 +1,7 @@
 package transports
 
 import (
-	"github.com/zishang520/engine.io/v2/types"
+	"github.com/winking324/engine.io/v2/types"
 )
 
 type WebSocketBuilder struct{}

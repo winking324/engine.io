@@ -9,8 +9,8 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/zishang520/engine.io/v2/errors"
-	"github.com/zishang520/engine.io/v2/utils"
+	"github.com/winking324/engine.io/v2/errors"
+	"github.com/winking324/engine.io/v2/utils"
 )
 
 var (
