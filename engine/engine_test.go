@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/winking324/engine.io/v2/events"
+	"github.com/winking324/engine.io/v2/transports"
+	"github.com/winking324/engine.io/v2/types"
 	"github.com/zishang520/engine.io-go-parser/packet"
 	"github.com/zishang520/engine.io-go-parser/parser"
-	"github.com/zishang520/engine.io/v2/events"
-	"github.com/zishang520/engine.io/v2/transports"
-	"github.com/zishang520/engine.io/v2/types"
 )
 
 // mockTransport is a mock implementation of the Transport interface for testing.
